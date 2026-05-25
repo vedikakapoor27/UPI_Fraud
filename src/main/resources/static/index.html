@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fraud Detection</title>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  /* Exact Fiserv brand palette */
+  --fi-orange:#FF6600;
+  --fi-orange-dk:#CC5200;
+  --fi-orange-lt:#FFF0E6;
+  --fi-orange-dim:rgba(255,102,0,0.10);
+  --fi-black:#1B1B1B;
+  --fi-white:#FFFFFF;
+  --fi-gray-50:#F5F5F5;
+  --fi-gray-100:#EBEBEB;
+  --fi-gray-200:#D6D6D6;
+  --fi-gray-300:#ADADAD;
+  --fi-gray-500:#757575;
+  --fi-gray-700:#424242;
+  /* Risk tier colours — industry standard (FATF / AML / Sift / Worldline) */
+  --risk-low:#1A7F4B;      /* Dark green */
+  --risk-low-bg:#EAF5EF;
+  --risk-low-bd:#A8D9BC;
+  --risk-med:#B45309;      /* Amber */
+  --risk-med-bg:#FEF8EC;
+  --risk-med-bd:#F5D08A;
+  --risk-high:#B91C1C;     /* Deep red */
+  --risk-high-bg:#FEF2F2;
+  --risk-high-bd:#F5ABAB;
+  /* UI */
+  --border:#E0E0E0;
+  --shadow-sm:0 1px 2px rgba(0,0,0,0.06);
+  --shadow:0 2px 8px rgba(0,0,0,0.09);
+  --shadow-lg:0 8px 24px rgba(0,0,0,0.13);
+  --mono:'IBM Plex Mono',monospace;
+  --sans:'Inter',sans-serif;
+  --radius:6px;
+}
+body{font-family:var(--sans);background:var(--fi-gray-50);color:var(--fi-black);font-size:13px;line-height:1.5;min-height:100vh}
+
+/* ── TOPNAV ── */
+.nav{height:52px;background:var(--fi-black);display:flex;align-items:center;padding:0 24px;gap:20px;position:sticky;top:0;z-index:50}
+.nav-brand{display:flex;align-items:center;gap:10px}
+.nav-logo-box{width:30px;height:30px;background:var(--fi-orange);border-radius:4px;display:flex;align-items:center;justify-content:center}
+.nav-logo-box svg{width:17px;height:17px;fill:none;stroke:#fff;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.nav-wordmark{font-size:17px;font-weight:700;color:var(--fi-white);letter-spacing:-.4px;font-family:var(--sans)}
+.nav-pipe{width:1px;height:20px;background:rgba(255,255,255,0.18)}
+.nav-product{font-size:11px;font-weight:500;color:rgba(255,255,255,0.5);letter-spacing:.6px;text-transform:uppercase}
+.nav-right{margin-left:auto;display:flex;align-items:center;gap:14px}
+.nav-live{display:flex;align-items:center;gap:5px;font-size:11px;color:#4ADE80;font-family:var(--mono);font-weight:500}
+.nav-dot{width:6px;height:6px;border-radius:50%;background:#4ADE80;animation:blink 1.8s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
+.nav-avatar{width:28px;height:28px;border-radius:50%;background:var(--fi-orange);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}
+
+/* ── KPI STRIP ── */
+.kpi-strip{display:grid;grid-template-columns:repeat(6,1fr);border-bottom:1px solid var(--border);background:var(--fi-white)}
+.kpi{padding:12px 16px;border-right:1px solid var(--border);position:relative}
+.kpi:last-child{border-right:none}
+.kpi-label{font-size:10px;font-weight:600;color:var(--fi-gray-500);text-transform:uppercase;letter-spacing:.7px;margin-bottom:3px}
+.kpi-val{font-size:20px;font-weight:700;font-family:var(--mono);line-height:1}
+.kpi-bar{position:absolute;bottom:0;left:0;right:0;height:3px}
+
+/* ── BODY GRID ── */
+.grid{display:grid;grid-template-columns:420px 1fr;height:calc(100vh - 108px);overflow:hidden}
+.pane-l{background:var(--fi-white);border-right:1px solid var(--border);overflow-y:auto;display:flex;flex-direction:column}
+.pane-r{background:var(--fi-gray-50);overflow-y:auto;padding:18px 20px}
+
+/* ── TABS ── */
+.tab-bar{display:flex;background:var(--fi-white);border-bottom:1px solid var(--border);flex-shrink:0}
+.t{flex:1;padding:11px 6px;font-size:11px;font-weight:600;text-align:center;color:var(--fi-gray-500);cursor:pointer;border-bottom:2px solid transparent;letter-spacing:.3px;transition:all .15s;user-select:none}
+.t.on{color:var(--fi-orange);border-bottom-color:var(--fi-orange);background:var(--fi-orange-lt)}
+.pane-tab{display:none;flex:1;flex-direction:column;overflow-y:auto}
+.pane-tab.on{display:flex}
+
+/* ── FORM ── */
+.form-body{padding:16px;flex:1}
+.sec{font-size:10px;font-weight:700;color:var(--fi-gray-300);text-transform:uppercase;letter-spacing:.8px;margin:16px 0 8px;display:flex;align-items:center;gap:8px}
+.sec:first-child{margin-top:0}
+.sec::after{content:'';flex:1;height:1px;background:var(--fi-gray-100)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px}
+.f{margin-bottom:10px}
+.f.no-mb{margin-bottom:0}
+.lbl{font-size:10px;font-weight:600;color:var(--fi-gray-700);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;display:flex;align-items:center;gap:4px}
+.req{color:var(--fi-orange);font-size:11px}
+.tooltip-icon{display:inline-flex;width:13px;height:13px;border-radius:50%;background:var(--fi-gray-200);color:var(--fi-gray-500);font-size:9px;align-items:center;justify-content:center;cursor:default;font-weight:700;flex-shrink:0}
+input,select,textarea{width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--sans);font-size:12.5px;color:var(--fi-black);background:var(--fi-white);outline:none;transition:border .15s,box-shadow .15s;-webkit-appearance:none}
+input:focus,select:focus,textarea:focus{border-color:var(--fi-orange);box-shadow:0 0 0 3px rgba(255,102,0,.12)}
+input::placeholder{color:var(--fi-gray-300)}
+textarea{resize:vertical;font-size:12px}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23757575' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px}
+.badge-row{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px}
+.badge-preset{padding:5px 10px;border-radius:4px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid;transition:all .12s;letter-spacing:.3px;text-transform:uppercase;user-select:none}
+.bp-low{background:var(--risk-low-bg);border-color:var(--risk-low-bd);color:var(--risk-low)}
+.bp-med{background:var(--risk-med-bg);border-color:var(--risk-med-bd);color:var(--risk-med)}
+.bp-high{background:var(--risk-high-bg);border-color:var(--risk-high-bd);color:var(--risk-high)}
+.btn-submit{width:100%;padding:11px;background:var(--fi-orange);border:none;border-radius:var(--radius);color:#fff;font-size:12.5px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;transition:all .18s;letter-spacing:.2px;margin-top:4px}
+.btn-submit:hover{background:var(--fi-orange-dk);box-shadow:0 4px 14px rgba(255,102,0,.3)}
+.btn-submit:active{transform:scale(.99)}
+.btn-submit svg{width:14px;height:14px;stroke:#fff;fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+.char-note{font-size:10px;color:var(--fi-gray-300);margin-top:3px}
+
+/* ── INLINE RESULT ── */
+.result-box{margin:0 16px 16px;border:1px solid var(--border);border-radius:8px;overflow:hidden;display:none;box-shadow:var(--shadow-sm)}
+.result-box.show{display:block;animation:pop .28s ease}
+@keyframes pop{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+.rb-head{padding:14px 16px;display:flex;align-items:center;justify-content:space-between}
+.rb-score{font-family:var(--mono);font-size:42px;font-weight:700;line-height:1}
+.rb-badge{padding:5px 14px;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;border:1px solid}
+.rbb-LOW{background:var(--risk-low-bg);color:var(--risk-low);border-color:var(--risk-low-bd)}
+.rbb-MEDIUM{background:var(--risk-med-bg);color:var(--risk-med);border-color:var(--risk-med-bd)}
+.rbb-HIGH{background:var(--risk-high-bg);color:var(--risk-high);border-color:var(--risk-high-bd);animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(185,28,28,.3)}50%{box-shadow:0 0 0 5px rgba(185,28,28,0)}}
+.rb-track{height:5px;background:var(--fi-gray-100);margin:0 16px 4px}
+.rb-fill{height:100%;transition:width .75s cubic-bezier(.34,1.56,.64,1);width:0}
+.rb-ticks{display:flex;justify-content:space-between;padding:0 16px 12px;font-size:9px;color:var(--fi-gray-300);font-family:var(--mono)}
+.rb-rules{padding:0 16px 14px}
+.rb-rl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--fi-gray-300);margin-bottom:6px}
+.rb-rule{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:4px;margin-bottom:3px;background:var(--fi-gray-50);border:1px solid var(--fi-gray-100)}
+.rb-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.rb-rname{flex:1;font-size:11.5px}
+.rb-rpts{font-family:var(--mono);font-size:11px;font-weight:600}
+.rb-foot{padding:8px 16px;background:var(--fi-gray-50);border-top:1px solid var(--border);display:flex;justify-content:space-between;font-size:10px;color:var(--fi-gray-300);font-family:var(--mono)}
+
+/* ── CSV IMPORT ── */
+.import-body{padding:16px;flex:1}
+.dz{border:2px dashed var(--fi-gray-200);border-radius:8px;padding:28px 16px;text-align:center;cursor:pointer;transition:all .18s;background:var(--fi-gray-50)}
+.dz:hover,.dz.over{border-color:var(--fi-orange);background:var(--fi-orange-dim)}
+.dz-icon{font-size:30px;margin-bottom:8px;opacity:.45}
+.dz-label{font-size:13px;color:var(--fi-gray-500);margin-bottom:3px}
+.dz-sub{font-size:11px;color:var(--fi-gray-300)}
+.tmpl{margin-top:14px;background:var(--fi-black);border-radius:6px;padding:12px 14px;font-family:var(--mono);font-size:10.5px;color:#9CA3AF;line-height:1.7;white-space:pre;overflow-x:auto}
+.btn-nav{padding:7px 14px;border-radius:var(--radius);border:1px solid var(--border);background:var(--fi-white);color:var(--fi-gray-500);font-size:11px;font-weight:600;cursor:pointer;transition:all .15s}
+.btn-nav:hover{border-color:var(--fi-orange);color:var(--fi-orange)}
+.btn-nav.primary{background:var(--fi-black);border-color:var(--fi-black);color:#fff}
+.btn-nav.primary:hover{background:var(--fi-gray-700)}
+
+/* ── RIGHT PANE ── */
+.rp-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.rp-title{font-size:15px;font-weight:700;color:var(--fi-black)}
+.rp-actions{display:flex;gap:8px;align-items:center}
+.filter-row{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
+.fc{padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;border:1px solid var(--border);background:var(--fi-white);color:var(--fi-gray-500);cursor:pointer;transition:all .14s;user-select:none}
+.fc:hover{border-color:var(--fi-black);color:var(--fi-black)}
+.fc.fa{background:var(--fi-black);border-color:var(--fi-black);color:#fff}
+.fc.fl{background:var(--risk-low-bg);border-color:var(--risk-low-bd);color:var(--risk-low)}
+.fc.fm{background:var(--risk-med-bg);border-color:var(--risk-med-bd);color:var(--risk-med)}
+.fc.fh{background:var(--risk-high-bg);border-color:var(--risk-high-bd);color:var(--risk-high)}
+.empty-st{text-align:center;padding:60px 20px;color:var(--fi-gray-300)}
+.empty-st .ei{font-size:40px;margin-bottom:12px;opacity:.3}
+.empty-st .et{font-size:13px;font-weight:600;color:var(--fi-gray-500);margin-bottom:4px}
+.card-tbl{background:var(--fi-white);border:1px solid var(--border);border-radius:8px;overflow:hidden;box-shadow:var(--shadow-sm)}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead{background:var(--fi-gray-50)}
+th{padding:9px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--fi-gray-300);border-bottom:1px solid var(--border);white-space:nowrap}
+tbody tr{border-bottom:1px solid var(--fi-gray-100);transition:background .12s;cursor:pointer}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:var(--fi-gray-50)}
+tbody tr.rn{animation:rowFlash .5s ease}
+@keyframes rowFlash{from{background:rgba(255,102,0,.08)}to{background:transparent}}
+td{padding:9px 12px;vertical-align:middle}
+.td-mono{font-family:var(--mono);font-size:11px;color:var(--fi-gray-500)}
+.td-amount{font-family:var(--mono);font-weight:600;color:var(--fi-black)}
+.td-score{font-family:var(--mono);font-weight:700;font-size:13px}
+.risk-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;border:1px solid;white-space:nowrap}
+.risk-pill .dot{width:5px;height:5px;border-radius:50%;background:currentColor}
+.rp-LOW{background:var(--risk-low-bg);color:var(--risk-low);border-color:var(--risk-low-bd)}
+.rp-MEDIUM{background:var(--risk-med-bg);color:var(--risk-med);border-color:var(--risk-med-bd)}
+.rp-HIGH{background:var(--risk-high-bg);color:var(--risk-high);border-color:var(--risk-high-bd)}
+.mini-tag{display:inline-block;padding:1px 5px;background:var(--fi-gray-100);color:var(--fi-gray-500);border-radius:3px;font-size:9px;font-family:var(--mono);margin:1px}
+.td-action{opacity:.4;transition:opacity .12s}
+tbody tr:hover .td-action{opacity:1}
+
+/* ── MODAL ── */
+.overlay{position:fixed;inset:0;background:rgba(27,27,27,.5);display:none;align-items:center;justify-content:center;z-index:200;padding:20px}
+.overlay.open{display:flex;animation:ov .2s ease}
+@keyframes ov{from{opacity:0}to{opacity:1}}
+.modal{background:var(--fi-white);border-radius:10px;width:560px;max-height:88vh;overflow-y:auto;box-shadow:var(--shadow-lg)}
+.mh{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--fi-white);z-index:1}
+.mh-title{font-size:14px;font-weight:700;color:var(--fi-black)}
+.mh-ref{font-size:11px;color:var(--fi-gray-300);font-family:var(--mono);margin-left:8px}
+.mclose{background:none;border:none;font-size:18px;color:var(--fi-gray-300);cursor:pointer;padding:0 4px;border-radius:4px;line-height:1}
+.mclose:hover{background:var(--fi-gray-100);color:var(--fi-black)}
+.mb{padding:20px}
+.score-band{border-radius:8px;padding:16px;display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;border:1px solid}
+.sb-LOW{background:var(--risk-low-bg);border-color:var(--risk-low-bd)}
+.sb-MEDIUM{background:var(--risk-med-bg);border-color:var(--risk-med-bd)}
+.sb-HIGH{background:var(--risk-high-bg);border-color:var(--risk-high-bd)}
+.sb-score{font-family:var(--mono);font-size:52px;font-weight:700;line-height:1}
+.sb-right{text-align:right}
+.sb-label{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--fi-gray-500);margin-bottom:4px}
+.sb-verdict{font-size:18px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.m-gauge-track{height:6px;background:var(--fi-gray-100);border-radius:3px;margin-bottom:16px;overflow:hidden}
+.m-gauge-fill{height:100%;border-radius:3px}
+.igrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}
+.igrid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px}
+.ic{background:var(--fi-gray-50);border:1px solid var(--fi-gray-100);border-radius:6px;padding:9px 11px}
+.ic-l{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--fi-gray-300);margin-bottom:2px}
+.ic-v{font-size:12px;font-weight:600;color:var(--fi-black);font-family:var(--mono);word-break:break-all}
+.m-sec{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--fi-gray-300);margin-bottom:8px}
+.m-rule{display:flex;align-items:flex-start;gap:9px;padding:8px 10px;border-radius:5px;margin-bottom:4px;border:1px solid}
+.mr-hit{background:var(--risk-high-bg);border-color:var(--risk-high-bd)}
+.mr-ok{background:var(--risk-low-bg);border-color:var(--risk-low-bd)}
+.mr-icon{font-size:13px;flex-shrink:0;margin-top:1px}
+.mr-body{flex:1}
+.mr-name{font-size:12px;font-weight:500;color:var(--fi-black)}
+.mr-thresh{font-size:10px;color:var(--fi-gray-300);margin-top:1px}
+.mr-pts{font-family:var(--mono);font-size:12px;font-weight:700;flex-shrink:0}
+.m-actions{display:flex;gap:8px;margin-top:16px;padding-top:14px;border-top:1px solid var(--border)}
+.ma{flex:1;padding:9px;border-radius:var(--radius);font-size:12px;font-weight:700;cursor:pointer;border:none;transition:all .17s;font-family:var(--sans)}
+.ma-flag{background:var(--risk-high);color:#fff}
+.ma-flag:hover{background:#991b1b}
+.ma-ok{background:var(--risk-low);color:#fff}
+.ma-ok:hover{background:#166534}
+.ma-close{background:var(--fi-gray-100);color:var(--fi-black)}
+.ma-close:hover{background:var(--fi-gray-200)}
+
+/* ── TOAST ── */
+.toast{position:fixed;top:60px;right:18px;z-index:300;width:300px;background:var(--fi-white);border:1px solid var(--border);border-radius:8px;padding:12px 14px;box-shadow:var(--shadow-lg);display:none;animation:tslide .25s ease;border-left:4px solid}
+.toast.show{display:flex;gap:10px;align-items:flex-start}
+@keyframes tslide{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:translateX(0)}}
+.toast-LOW{border-left-color:var(--risk-low)}
+.toast-MEDIUM{border-left-color:var(--risk-med)}
+.toast-HIGH{border-left-color:var(--risk-high)}
+.t-ico{font-size:16px;flex-shrink:0}
+.t-title{font-size:12px;font-weight:700;color:var(--fi-black);margin-bottom:2px}
+.t-sub{font-size:11px;color:var(--fi-gray-500)}
+
+/* ── HISTORY DRAWER ── */
+.hist-overlay{position:fixed;inset:0;background:rgba(27,27,27,.45);z-index:150;display:none}
+.hist-overlay.open{display:block;animation:ov .2s ease}
+.hist-drawer{position:fixed;top:0;right:0;bottom:0;width:420px;background:var(--fi-white);z-index:151;display:flex;flex-direction:column;box-shadow:-4px 0 24px rgba(0,0,0,.15);transform:translateX(100%);transition:transform .25s cubic-bezier(.4,0,.2,1)}
+.hist-drawer.open{transform:translateX(0)}
+.hist-dh{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.hist-dh-title{font-size:14px;font-weight:700;color:var(--fi-black)}
+.hist-dh-count{font-size:10px;font-family:var(--mono);color:var(--fi-gray-300);margin-top:2px}
+.hist-dh-right{display:flex;align-items:center;gap:8px}
+.hist-btn{padding:5px 11px;border-radius:var(--radius);border:1px solid var(--border);background:var(--fi-white);color:var(--fi-gray-500);font-size:11px;font-weight:600;cursor:pointer;transition:all .14s}
+.hist-btn:hover{border-color:var(--risk-high);color:var(--risk-high)}
+.hist-close{background:none;border:none;font-size:20px;color:var(--fi-gray-300);cursor:pointer;padding:0 4px;line-height:1;border-radius:4px}
+.hist-close:hover{background:var(--fi-gray-100);color:var(--fi-black)}
+.hist-body{flex:1;overflow-y:auto;padding:12px 14px}
+.hist-empty{text-align:center;padding:60px 20px;color:var(--fi-gray-300)}
+.hist-empty .hei{font-size:36px;opacity:.3;margin-bottom:10px}
+.hist-empty .het{font-size:13px;font-weight:600;color:var(--fi-gray-500);margin-bottom:4px}
+.hist-day{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--fi-gray-300);padding:8px 2px 4px;display:flex;align-items:center;gap:6px}
+.hist-day::after{content:'';flex:1;height:1px;background:var(--fi-gray-100)}
+.hist-card{border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-bottom:6px;cursor:pointer;transition:all .14s;position:relative;overflow:hidden;background:var(--fi-white)}
+.hist-card:hover{border-color:var(--fi-orange);box-shadow:var(--shadow-sm)}
+.hist-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:3px 0 0 3px}
+.hc-LOW::before{background:var(--risk-low)}.hc-MEDIUM::before{background:var(--risk-med)}.hc-HIGH::before{background:var(--risk-high)}
+.hc-row1{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.hc-ref{font-family:var(--mono);font-size:10px;color:var(--fi-gray-500);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px}
+.hc-badges{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.hc-score{font-family:var(--mono);font-size:13px;font-weight:700}
+.hc-row2{display:flex;align-items:center;gap:5px;font-size:10.5px;font-family:var(--mono);color:var(--fi-gray-700)}
+.hc-arrow{color:var(--fi-gray-300);font-size:9px}
+.hc-vpa{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px}
+.hc-amt{margin-left:auto;font-weight:600;color:var(--fi-black);flex-shrink:0}
+.hc-row3{font-size:9px;color:var(--fi-gray-300);font-family:var(--mono);margin-top:4px}
+.nav-hist-btn{padding:5px 12px;border-radius:var(--radius);border:1px solid rgba(255,255,255,.2);background:transparent;color:rgba(255,255,255,.8);font-size:11px;font-weight:600;cursor:pointer;transition:all .14s;display:flex;align-items:center;gap:6px;font-family:var(--sans);letter-spacing:.2px}
+.nav-hist-btn:hover{background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.4)}
+.nav-hist-badge{background:var(--fi-orange);color:#fff;border-radius:8px;font-size:9px;font-weight:700;padding:1px 5px;font-family:var(--mono);display:none;min-width:16px;text-align:center}
+.nav-hist-badge.show{display:inline-block}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--fi-gray-200);border-radius:2px}
+</style>
+
+<!-- TOAST -->
+<div class="toast" id="toast">
+  <div class="t-ico" id="t-ico"></div>
+  <div><div class="t-title" id="t-title"></div><div class="t-sub" id="t-sub"></div></div>
+</div>
+
+<!-- MODAL -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="mh">
+      <div style="display:flex;align-items:center">
+        <span class="mh-title">Transaction Analysis Report</span>
+        <span class="mh-ref" id="m-ref"></span>
+      </div>
+      <button class="mclose" onclick="closeMod()">✕</button>
+    </div>
+    <div class="mb" id="m-body"></div>
+  </div>
+</div>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-brand">
+    <div class="nav-logo-box">
+      <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+    </div>
+    <span class="nav-wordmark">Fraud Detection</span>
+    <span class="nav-pipe"></span>
+    <span class="nav-product">Fraud Risk Monitor · UPI</span>
+  </div>
+  <div class="nav-right">
+    <div class="nav-live"><span class="nav-dot"></span>MONITORING</div>
+    <button class="nav-hist-btn" onclick="openHistory()">
+      🕘 History <span class="nav-hist-badge" id="hist-badge"></span>
+    </button>
+    <div class="nav-avatar">FD</div>
+  </div>
+</nav>
+
+<!-- HISTORY DRAWER -->
+<div class="hist-overlay" id="hist-overlay" onclick="closeHistory()"></div>
+<div class="hist-drawer" id="hist-drawer">
+  <div class="hist-dh">
+    <div>
+      <div class="hist-dh-title">🕘 Screening History</div>
+      <div class="hist-dh-count" id="hist-count">0 records · stored locally</div>
+    </div>
+    <div class="hist-dh-right">
+      <button class="hist-btn" onclick="clearHistory()">Clear All</button>
+      <button class="hist-close" onclick="closeHistory()">✕</button>
+    </div>
+  </div>
+  <div class="hist-body" id="hist-body">
+    <div class="hist-empty"><div class="hei">🕘</div><div class="het">No history yet</div><div>Screened transactions will appear here</div></div>
+  </div>
+</div>
+
+<!-- KPI STRIP -->
+<div class="kpi-strip">
+  <div class="kpi">
+    <div class="kpi-label">Total Screened</div>
+    <div class="kpi-val" id="k-total" style="color:var(--fi-black)">0</div>
+    <div class="kpi-bar" style="background:var(--fi-orange)"></div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Low Risk</div>
+    <div class="kpi-val" id="k-low" style="color:var(--risk-low)">0</div>
+    <div class="kpi-bar" style="background:var(--risk-low)"></div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Medium Risk</div>
+    <div class="kpi-val" id="k-med" style="color:var(--risk-med)">0</div>
+    <div class="kpi-bar" style="background:var(--risk-med)"></div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">High Risk</div>
+    <div class="kpi-val" id="k-high" style="color:var(--risk-high)">0</div>
+    <div class="kpi-bar" style="background:var(--risk-high)"></div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Avg. Risk Score</div>
+    <div class="kpi-val" id="k-avg" style="color:var(--fi-black)">—</div>
+    <div class="kpi-bar" style="background:var(--fi-gray-200)"></div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Alert Rate</div>
+    <div class="kpi-val" id="k-rate" style="color:var(--fi-black)">—</div>
+    <div class="kpi-bar" style="background:var(--fi-gray-200)"></div>
+  </div>
+</div>
+
+<!-- BODY -->
+<div class="grid">
+
+<!-- LEFT -->
+<div class="pane-l">
+  <div class="tab-bar">
+    <div class="t on" onclick="swTab('manual',this)">Manual Entry</div>
+    <div class="t" onclick="swTab('import',this)">Batch Import</div>
+  </div>
+
+  <!-- MANUAL -->
+  <div class="pane-tab on" id="pane-manual">
+    <div class="form-body">
+
+      <!-- Transaction Identifiers -->
+      <div class="sec">Transaction Identifiers</div>
+      <div class="row2">
+        <div class="f no-mb">
+          <div class="lbl">Transaction Ref <span class="req">*</span> <span class="tooltip-icon" title="Unique reference from payment network">?</span></div>
+          <input id="f-ref" placeholder="e.g. UPI/DR/2605/123456"/>
+        </div>
+        <div class="f no-mb">
+          <div class="lbl">Channel <span class="req">*</span></div>
+          <select id="f-channel">
+            <option value="UPI_APP">UPI App (GPay/PhonePe)</option>
+            <option value="UPI_BROWSER">UPI Browser</option>
+            <option value="USSD">USSD (*99#)</option>
+            <option value="SDK">SDK / API</option>
+            <option value="POS">POS Terminal</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Parties -->
+      <div class="sec">Parties</div>
+      <div class="row2">
+        <div class="f no-mb">
+          <div class="lbl">Payer VPA / UPI ID <span class="req">*</span></div>
+          <input id="f-payer" placeholder="user@bankname"/>
+        </div>
+        <div class="f no-mb">
+          <div class="lbl">Payer Bank <span class="req">*</span></div>
+          <select id="f-payer-bank">
+            <option>HDFC Bank</option><option>SBI</option><option>ICICI Bank</option>
+            <option>Axis Bank</option><option>Kotak Bank</option><option>Yes Bank</option>
+            <option>PNB</option><option>Canara Bank</option><option>Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="row2">
+        <div class="f no-mb">
+          <div class="lbl">Payee VPA / Merchant ID <span class="req">*</span></div>
+          <input id="f-payee" placeholder="merchant@bankname"/>
+        </div>
+        <div class="f no-mb">
+          <div class="lbl">Payee Bank / Acquirer</div>
+          <select id="f-payee-bank">
+            <option>HDFC Bank</option><option>SBI</option><option>ICICI Bank</option>
+            <option>Axis Bank</option><option>Razorpay</option><option>PayU</option>
+            <option>Cashfree</option><option>Unknown</option>
+          </select>
+        </div>
+      </div>
+      <div class="row2">
+        <div class="f no-mb">
+          <div class="lbl">Merchant Category Code (MCC)</div>
+          <select id="f-mcc">
+            <option value="5411">5411 — Grocery</option>
+            <option value="5812">5812 — Restaurant</option>
+            <option value="5999">5999 — Misc. Retail</option>
+            <option value="7011">7011 — Hotel/Lodging</option>
+            <option value="4829">4829 — Wire Transfer</option>
+            <option value="6012">6012 — Financial Institution</option>
+            <option value="7995">7995 — Gambling</option>
+            <option value="0000">0000 — Unknown / Unassigned</option>
+          </select>
+        </div>
+        <div class="f no-mb">
+          <div class="lbl">Transaction Type</div>
+          <select id="f-type">
+            <option value="P2P">P2P — Peer to Peer</option>
+            <option value="P2M">P2M — Peer to Merchant</option>
+            <option value="COLLECT">Collect Request</option>
+            <option value="REFUND">Refund</option>
+            <option value="RECURRING">Recurring / Mandate</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Transaction Details -->
+      <div class="sec">Transaction Details</div>
+      <div class="row3">
+        <div class="f no-mb">
+          <div class="lbl">Amount (₹) <span class="req">*</span></div>
+          <input type="number" id="f-amount" placeholder="0.00" min="0" step="0.01"/>
+        </div>
+        <div class="f no-mb">
+          <div class="lbl">Currency</div>
+          <select id="f-currency"><option>INR</option><option>USD</option><option>EUR</option><option>GBP</option></select>
+        </div>
+        <div class="f no-mb">
+          <div class="lbl">Auth Method</div>
+          <select id="f-auth">
+            <option value="UPI_PIN">UPI PIN</option>
+            <option value="BIOMETRIC">Biometric</option>
+            <option value="OTP">OTP</option>
+            <option value="NONE">None / Bypassed</option>
+          </select>
+        </div>
+      </div>
+      <div class="row2">
+        <div class="f no-mb">
+          <div class="lbl">Timestamp <span class="req">*</span></div>
+          <input type="datetime-local" id="f-time"/>
+        </div>
+        <div class="f no-mb">
+          <div class="lbl">Transaction Location</div>
+          <select id="f-loc">
+            <option>Andhra Pradesh</option>
+            <option>Arunachal Pradesh</option>
+            <option>Assam</option>
+            <option>Bihar</option>
+            <option>Chhattisgarh</option>
+            <option>Goa</option>
+            <option>Gujarat</option>
+            <option>Haryana</option>
+            <option>Himachal Pradesh</option>
+            <option>Jharkhand</option>
+            <option>Karnataka</option>
+            <option>Kerala</option>
+            <option>Madhya Pradesh</option>
+            <option>Maharashtra</option>
+            <option>Manipur</option>
+            <option>Meghalaya</option>
+            <option>Mizoram</option>
+            <option>Nagaland</option>
+            <option>Odisha</option>
+            <option>Punjab</option>
+            <option>Rajasthan</option>
+            <option>Sikkim</option>
+            <option>Tamil Nadu</option>
+            <option>Telangana</option>
+            <option>Tripura</option>
+            <option>Uttar Pradesh</option>
+            <option>Uttarakhand</option>
+            <option>West Bengal</option>
+            <option disabled>── Union Territories ──</option>
+            <option>Andaman &amp; Nicobar Islands</option>
+            <option>Chandigarh</option>
+            <option>Dadra &amp; Nagar Haveli and Daman &amp; Diu</option>
+            <option>Delhi (NCT)</option>
+            <option>Jammu &amp; Kashmir</option>
+            <option>Ladakh</option>
+            <option>Lakshadweep</option>
+            <option>Puducherry</option>
+            <option disabled>── Other ──</option>
+            <option>Cross-Border</option>
+            <option>Unknown</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Device & Network -->
+      <div class="sec">Device & Network</div>
+      <div class="row2">
+        <div class="f no-mb">
+          <div class="lbl">Device ID <span class="tooltip-icon" title="Hashed device fingerprint">?</span></div>
+          <input id="f-device" placeholder="e.g. d8f3a1b2c9..."/>
+        </div>
+        <div class="f no-mb">
+          <div class="lbl">IP Address</div>
+          <input id="f-ip" placeholder="e.g. 192.168.1.1"/>
+        </div>
+      </div>
+      <div class="row2">
+        <div class="f no-mb">
+          <div class="lbl">Device Type</div>
+          <select id="f-devtype">
+            <option>Android Mobile</option><option>iOS Mobile</option>
+            <option>Web Browser</option><option>Feature Phone</option><option>Unknown</option>
+          </select>
+        </div>
+        <div class="f no-mb">
+          <div class="lbl">Is Device Rooted/Jailbroken</div>
+          <select id="f-rooted"><option value="N">No</option><option value="Y">Yes</option><option value="U">Unknown</option></select>
+        </div>
+      </div>
+
+      <!-- Remarks -->
+      <div class="sec">Remarks / Narration</div>
+      <div class="f">
+        <textarea id="f-remarks" rows="2" placeholder="Payment description or internal analyst note (optional)"></textarea>
+      </div>
+
+      <button class="btn-submit" onclick="doAnalyze()">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        Run Fraud Screening
+      </button>
+    </div>
+
+    <!-- Inline result -->
+    <div class="result-box" id="rb">
+      <div class="rb-head">
+        <div>
+          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.7px;color:var(--fi-gray-300);margin-bottom:2px">Risk Score (0–100)</div>
+          <div class="rb-score" id="rb-score">0</div>
+        </div>
+        <div style="text-align:right">
+          <div class="rb-badge" id="rb-badge">—</div>
+          <div style="font-size:9px;color:var(--fi-gray-300);margin-top:6px">Click row → full report</div>
+        </div>
+      </div>
+      <div class="rb-track"><div class="rb-fill" id="rb-fill"></div></div>
+      <div class="rb-ticks"><span>0</span><span>LOW &lt;30</span><span>MED &lt;60</span><span>HIGH ≥60</span><span>100</span></div>
+      <div class="rb-rules">
+        <div class="rb-rl">Rule Evaluation</div>
+        <div id="rb-rules-list"></div>
+      </div>
+      <div class="rb-foot">
+        <span id="rb-engine">Engine: LOCAL</span>
+        <span id="rb-ts">—</span>
+      </div>
+    </div>
+  </div><!-- /manual -->
+
+  <!-- IMPORT -->
+  <div class="pane-tab" id="pane-import">
+    <div class="import-body">
+      <div class="sec">Required CSV Columns</div>
+      <div class="tmpl">ref,payer_vpa,payee_vpa,amount,timestamp,location,device_id,ip,auth,type
+UPI/DR/001,user@hdfc,merchant@icici,15000,2026-05-25T02:15,Delhi,d8f3a1,10.0.0.1,UPI_PIN,P2M
+UPI/DR/002,customer@sbi,store@axis,350,2026-05-25T10:30,Mumbai,afe92b,192.168.1.2,BIOMETRIC,P2M</div>
+
+      <div class="sec" style="margin-top:14px">Upload CSV</div>
+      <div class="dz" id="dz" onclick="document.getElementById('fi-csv').click()">
+        <div class="dz-icon">📂</div>
+        <div class="dz-label">Click or drag a .csv file here</div>
+        <div class="dz-sub">UTF-8 encoding · Max 10 MB</div>
+        <input type="file" id="fi-csv" accept=".csv" style="display:none" onchange="handleFile(this)"/>
+      </div>
+      <div id="imp-status" style="margin-top:8px;font-size:11px;color:var(--fi-gray-300);text-align:center"></div>
+    </div>
+  </div>
+
+</div><!-- /pane-l -->
+
+<!-- RIGHT -->
+<div class="pane-r">
+  <div class="rp-header">
+    <div class="rp-title">Transaction Screening Ledger</div>
+    <div class="rp-actions">
+      <button class="btn-nav" onclick="clearAll()">Clear All</button>
+      <button class="btn-nav primary" onclick="doExport()">↓ Export CSV</button>
+    </div>
+  </div>
+
+  <div class="filter-row">
+    <span style="font-size:10px;color:var(--fi-gray-300);text-transform:uppercase;letter-spacing:.5px;font-weight:600;margin-right:4px">Filter:</span>
+    <div class="fc fa" onclick="setF('ALL',this)">All <span id="fc-all">0</span></div>
+    <div class="fc" onclick="setF('LOW',this)">● Low Risk <span id="fc-LOW">0</span></div>
+    <div class="fc" onclick="setF('MEDIUM',this)">● Medium Risk <span id="fc-MEDIUM">0</span></div>
+    <div class="fc" onclick="setF('HIGH',this)">● High Risk <span id="fc-HIGH">0</span></div>
+  </div>
+
+  <div id="empty-st" class="empty-st">
+    <div class="ei">🛡️</div>
+    <div class="et">No transactions screened yet</div>
+    <div>Submit a transaction or import a CSV file to begin monitoring</div>
+  </div>
+
+  <div id="tbl-wrap" style="display:none">
+    <div class="card-tbl">
+      <table>
+        <thead>
+          <tr>
+            <th>Ref / ID</th>
+            <th>Payer VPA</th>
+            <th>Payee VPA</th>
+            <th>Amount</th>
+            <th>Auth</th>
+            <th>Risk Score</th>
+            <th>Risk Level</th>
+            <th>Alerts</th>
+            <th>Screened At</th>
+          </tr>
+        </thead>
+        <tbody id="tbl-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div><!-- /pane-r -->
+
+</div><!-- /grid -->
+
+<script>
+/* ═══════════════════════════════════════════════
+   HISTORY  —  localStorage (works for local files)
+   Key: "fd_history"  →  JSON array, max 500 recs
+═══════════════════════════════════════════════ */
+const HIST_KEY = 'fd_history';
+const HIST_MAX = 500;
+
+function histSave(rec) {
+  try {
+    const arr = histLoad();
+    arr.unshift({
+      tx: rec.tx,
+      result: { score: rec.result.score, tier: rec.result.tier, rules: rec.result.rules },
+      ts_display: rec.ts_display,
+      saved_at: new Date().toISOString()
+    });
+    if (arr.length > HIST_MAX) arr.length = HIST_MAX;
+    localStorage.setItem(HIST_KEY, JSON.stringify(arr));
+    histUpdateBadge(arr.length);
+  } catch(e) { console.warn('histSave:', e); }
+}
+
+function histLoad() {
+  try { return JSON.parse(localStorage.getItem(HIST_KEY) || '[]'); }
+  catch(_) { return []; }
+}
+
+function histUpdateBadge(n) {
+  const b = document.getElementById('hist-badge');
+  if (!b) return;
+  if (n > 0) { b.textContent = n > 99 ? '99+' : n; b.className = 'nav-hist-badge show'; }
+  else { b.className = 'nav-hist-badge'; }
+}
+
+function openHistory() {
+  document.getElementById('hist-overlay').classList.add('open');
+  document.getElementById('hist-drawer').classList.add('open');
+  renderHistory();
+}
+function closeHistory() {
+  document.getElementById('hist-overlay').classList.remove('open');
+  document.getElementById('hist-drawer').classList.remove('open');
+}
+
+function renderHistory() {
+  const arr = histLoad();
+  document.getElementById('hist-count').textContent = arr.length + ' record' + (arr.length !== 1 ? 's' : '') + ' · stored locally';
+  histUpdateBadge(arr.length);
+  const body = document.getElementById('hist-body');
+  if (!arr.length) {
+    body.innerHTML = '<div class="hist-empty"><div class="hei">🕘</div><div class="het">No history yet</div><div>Screened transactions will appear here automatically</div></div>';
+    return;
+  }
+  // Group by day
+  const groups = {};
+  arr.forEach((rec, i) => {
+    const d = new Date(rec.saved_at).toLocaleDateString('en-IN', { weekday:'short', day:'2-digit', month:'short', year:'numeric' });
+    if (!groups[d]) groups[d] = [];
+    groups[d].push({ rec, i });
+  });
+  const col = t => ({ LOW:'var(--risk-low)', MEDIUM:'var(--risk-med)', HIGH:'var(--risk-high)' }[t] || '#757');
+  let html = '';
+  for (const [day, items] of Object.entries(groups)) {
+    html += `<div class="hist-day">${day}</div>`;
+    items.forEach(({ rec, i }) => {
+      html += `<div class="hist-card hc-${rec.result.tier}" onclick="histOpenModal(${i})">
+        <div class="hc-row1">
+          <div class="hc-ref">${rec.tx.ref}</div>
+          <div class="hc-badges">
+            <span class="risk-pill rp-${rec.result.tier}"><span class="dot"></span>${rec.result.tier}</span>
+            <span class="hc-score" style="color:${col(rec.result.tier)}">${rec.result.score}</span>
+          </div>
+        </div>
+        <div class="hc-row2">
+          <span class="hc-vpa">${rec.tx.payer_vpa}</span>
+          <span class="hc-arrow">→</span>
+          <span class="hc-vpa">${rec.tx.payee_vpa}</span>
+          <span class="hc-amt">₹${Number(rec.tx.amount).toLocaleString('en-IN')}</span>
+        </div>
+        <div class="hc-row3">${rec.ts_display} · ${rec.tx.channel} · ${rec.tx.auth}</div>
+      </div>`;
+    });
+  }
+  body.innerHTML = html;
+  window._histArr = arr;
+}
+
+function histOpenModal(i) {
+  const arr = window._histArr || [];
+  if (!arr[i]) return;
+  closeHistory();
+  openModal({ tx: arr[i].tx, result: arr[i].result, ts_display: arr[i].ts_display });
+}
+
+function clearHistory() {
+  if (!confirm('Clear all screening history? This cannot be undone.')) return;
+  localStorage.removeItem(HIST_KEY);
+  histUpdateBadge(0);
+  renderHistory();
+  toast('History Cleared', 'All stored records removed.', 'MEDIUM');
+}
+
+// Init badge on load
+window.addEventListener('DOMContentLoaded', () => histUpdateBadge(histLoad().length));
+
+/* ═══════════════════════════════
+   RULE ENGINE
+   Industry-standard thresholds:
+   LOW < 30 | MEDIUM 30–59 | HIGH ≥ 60
+═══════════════════════════════ */
+const KNOWN_MERCH=['AMAZON','FLIPKART','ZOMATO','SWIGGY','NETFLIX','UBER','OLA','IRCTC','MYNTRA','BIGBASKET','NYKAA','GPAY','PHONEPE'];
+const HIGH_RISK_MCC=['4829','6012','7995']; // wire transfer, financial inst., gambling
+const velStore={};
+const devStore=new Set();
+
+function trackVel(vpa,ts){
+  if(!velStore[vpa])velStore[vpa]=[];
+  velStore[vpa].push(new Date(ts).getTime()||Date.now());
+}
+function velCount(vpa,ms){
+  const now=Date.now();
+  return(velStore[vpa]||[]).filter(t=>now-t<ms).length;
+}
+function knownMerch(vpa){
+  return KNOWN_MERCH.some(m=>vpa.toUpperCase().includes(m));
+}
+
+function runEngine(tx){
+  const {payer_vpa,payee_vpa,amount,timestamp,location,device_id,ip,auth,type,mcc,rooted}=tx;
+  const hr=new Date(timestamp).getHours();
+  const vel=velCount(payer_vpa,5*60*1000);
+  const isNewDev=!devStore.has(device_id||'X');
+  devStore.add(device_id||'X');
+  const R=[];let s=0;
+
+  // R1 — Transaction amount threshold (RBI ADF pattern)
+  const a=parseFloat(amount)||0;
+  const r1=a>=10000;
+  const r1s=r1?(a>=100000?30:a>=50000?22:a>=25000?15:10):0;
+  R.push({name:'Large value transaction',detail:'Amount ₹'+a.toLocaleString('en-IN')+' breaches threshold',threshold:'≥ ₹10,000',hit:r1,pts:r1s});
+  s+=r1s;
+
+  // R2 — Unusual transaction hour (FATF typology: off-hours activity)
+  const r2=hr>=22||hr<6;
+  R.push({name:'Off-hours transaction',detail:'Initiated at '+String(hr).padStart(2,'0')+':xx',threshold:'22:00–05:59 window',hit:r2,pts:r2?20:0});
+  if(r2)s+=20;
+
+  // R3 — Unknown/unverified payee + elevated amount
+  const r3=!knownMerch(payee_vpa)&&a>5000;
+  R.push({name:'Unverified counterparty',detail:'Payee not in trusted merchant registry',threshold:'Unknown payee & amt >₹5,000',hit:r3,pts:r3?18:0});
+  if(r3)s+=18;
+
+  // R4 — Transaction velocity (NPCI velocity guidelines: >3 in 5 min)
+  const r4=vel>=3;
+  const r4s=r4?Math.min(25,vel*6):0;
+  R.push({name:'Velocity breach',detail:vel+' transactions from same VPA in 5 min',threshold:'>3 tx / 5-minute window',hit:r4,pts:r4s});
+  s+=r4s;
+
+  // R5 — Jurisdiction / geography risk
+  const r5=location==='Unknown'||location==='Cross-Border';
+  R.push({name:'High-risk jurisdiction',detail:'Location: '+location,threshold:'Unknown or cross-border origin',hit:r5,pts:r5?14:0});
+  if(r5)s+=14;
+
+  // R6 — High-risk MCC
+  const r6=HIGH_RISK_MCC.includes(mcc);
+  R.push({name:'High-risk merchant category',detail:'MCC '+(mcc||'N/A')+' flagged (wire/gambling/financial)',threshold:'MCC: 4829, 6012, 7995',hit:r6,pts:r6?16:0});
+  if(r6)s+=16;
+
+  // R7 — Auth bypass / weak auth
+  const r7=auth==='NONE';
+  R.push({name:'Authentication bypass',detail:'Transaction auth method: '+auth,threshold:'Non-authenticated transaction',hit:r7,pts:r7?20:0});
+  if(r7)s+=20;
+
+  // R8 — New device + high amount (device fingerprint risk)
+  const r8=isNewDev&&a>10000;
+  R.push({name:'New device fingerprint',detail:'Unrecognised device ID with high-value tx',threshold:'First-seen device & amt >₹10,000',hit:r8,pts:r8?12:0});
+  if(r8)s+=12;
+
+  // R9 — Rooted / jailbroken device
+  const r9=rooted==='Y';
+  R.push({name:'Compromised device (rooted)',detail:'Device reported as rooted/jailbroken',threshold:'Rooted or jailbroken = Yes',hit:r9,pts:r9?15:0});
+  if(r9)s+=15;
+
+  // R10 — Collect request (higher risk pattern per NPCI)
+  const r10=type==='COLLECT';
+  R.push({name:'Collect request pattern',detail:'Pull-based payment — higher social engineering risk',threshold:'Transaction type = Collect',hit:r10,pts:r10?8:0});
+  if(r10)s+=8;
+
+  s=Math.min(100,s);
+  const tier=s<30?'LOW':s<60?'MEDIUM':'HIGH';
+  return{score:s,tier,rules:R};
+}
+
+/* ═══════════════════════════════ STATE ═══════════════════════════════ */
+const ledger=[];
+let curFilter='ALL';
+const stats={total:0,LOW:0,MEDIUM:0,HIGH:0,scoreSum:0};
+
+function tierColor(t){return{LOW:'var(--risk-low)',MEDIUM:'var(--risk-med)',HIGH:'var(--risk-high)'}[t]||'#757575'}
+
+/* ═══════════════════════════════ ANALYZE ═══════════════════════════════ */
+function doAnalyze(){
+  const payer=document.getElementById('f-payer').value.trim();
+  const payee=document.getElementById('f-payee').value.trim();
+  const amount=document.getElementById('f-amount').value;
+  const ts=document.getElementById('f-time').value;
+  if(!payer||!payee||!amount){toast('Validation Error','Payer VPA, Payee VPA and Amount are required.','HIGH');return;}
+
+  const tx={
+    ref:document.getElementById('f-ref').value.trim()||('UPI/SCR/'+Date.now().toString().slice(-7)),
+    channel:document.getElementById('f-channel').value,
+    payer_vpa:payer,
+    payer_bank:document.getElementById('f-payer-bank').value,
+    payee_vpa:payee,
+    payee_bank:document.getElementById('f-payee-bank').value,
+    mcc:document.getElementById('f-mcc').value,
+    type:document.getElementById('f-type').value,
+    amount:parseFloat(amount)||0,
+    currency:document.getElementById('f-currency').value,
+    auth:document.getElementById('f-auth').value,
+    timestamp:ts||new Date().toISOString(),
+    location:document.getElementById('f-loc').value,
+    device_id:document.getElementById('f-device').value.trim()||'UNKNOWN',
+    ip:document.getElementById('f-ip').value.trim()||'0.0.0.0',
+    devtype:document.getElementById('f-devtype').value,
+    rooted:document.getElementById('f-rooted').value,
+    remarks:document.getElementById('f-remarks').value.trim(),
+    screened_at:new Date().toISOString()
+  };
+
+  trackVel(tx.payer_vpa,tx.timestamp);
+  /* ── BACKEND HOOK ──
+     Replace runEngine(tx) with:
+     const res = await fetch('/api/v1/screen', {
+       method:'POST', headers:{'Content-Type':'application/json'},
+       body:JSON.stringify(tx)
+     });
+     const result = await res.json();
+     // Expected shape: { score:number, tier:'LOW'|'MEDIUM'|'HIGH', rules:[...] }
+  */
+  const result=runEngine(tx);
+  const rec={tx,result,ts_display:new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'})};
+  ledger.unshift(rec);
+  histSave(rec);
+  updStats(result.tier,result.score);
+  showInline(rec);
+  renderTable();
+  openModal(rec);
+  const icons={LOW:'✅',MEDIUM:'⚠️',HIGH:'🚨'};
+  toast(icons[result.tier]+' '+result.tier+' RISK','Ref: '+tx.ref+' · Score: '+result.score+'/100',result.tier);
+}
+
+/* ═══════════════════════════════ INLINE RESULT ═══════════════════════════════ */
+function showInline(rec){
+  const{result,ts_display}=rec;
+  const col=tierColor(result.tier);
+  const box=document.getElementById('rb');
+  box.className='result-box';void box.offsetWidth;box.className='result-box show';
+
+  document.getElementById('rb-score').textContent=result.score;
+  document.getElementById('rb-score').style.color=col;
+
+  const bdg=document.getElementById('rb-badge');
+  bdg.textContent=result.tier+' RISK';
+  bdg.className='rb-badge rbb-'+result.tier;
+
+  const fill=document.getElementById('rb-fill');
+  fill.style.width='0';fill.style.background=col;
+  setTimeout(()=>fill.style.width=result.score+'%',60);
+
+  document.getElementById('rb-rules-list').innerHTML=result.rules.map(r=>`
+    <div class="rb-rule">
+      <div class="rb-dot" style="background:${r.hit?col:'var(--fi-gray-200)'}"></div>
+      <div class="rb-rname" style="color:${r.hit?'var(--fi-black)':'var(--fi-gray-300)'}">${r.name}</div>
+      <div class="rb-rpts" style="color:${r.hit?col:'var(--fi-gray-200)'}">${r.hit?'+'+r.pts:'—'}</div>
+    </div>`).join('');
+
+  document.getElementById('rb-engine').textContent='Engine: LOCAL · Rules: '+result.rules.length;
+  document.getElementById('rb-ts').textContent=ts_display;
+}
+
+/* ═══════════════════════════════ MODAL ═══════════════════════════════ */
+function openModal(rec){
+  const{tx,result,ts_display}=rec;
+  const col=tierColor(result.tier);
+  document.getElementById('m-ref').textContent=' · '+tx.ref;
+  document.getElementById('m-body').innerHTML=`
+    <div class="score-band sb-${result.tier}">
+      <div>
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:var(--fi-gray-500);margin-bottom:2px">Risk Score</div>
+        <div class="sb-score" style="color:${col}">${result.score}</div>
+        <div style="font-size:9px;color:var(--fi-gray-300);margin-top:2px">out of 100</div>
+      </div>
+      <div class="sb-right">
+        <div class="sb-label">Risk Classification</div>
+        <div class="sb-verdict" style="color:${col}">${result.tier}</div>
+        <div style="margin-top:6px"><span class="risk-pill rp-${result.tier}"><span class="dot"></span>${result.tier} RISK</span></div>
+        <div style="font-size:10px;color:var(--fi-gray-300);margin-top:4px">${result.tier==='LOW'?'No immediate action required':result.tier==='MEDIUM'?'Flag for analyst review':'Escalate — block & investigate'}</div>
+      </div>
+    </div>
+    <div class="m-gauge-track"><div class="m-gauge-fill" style="width:${result.score}%;background:${col}"></div></div>
+
+    <div class="m-sec">Transaction Details</div>
+    <div class="igrid3">
+      <div class="ic"><div class="ic-l">Reference</div><div class="ic-v">${tx.ref}</div></div>
+      <div class="ic"><div class="ic-l">Channel</div><div class="ic-v">${tx.channel}</div></div>
+      <div class="ic"><div class="ic-l">Type</div><div class="ic-v">${tx.type}</div></div>
+    </div>
+    <div class="igrid">
+      <div class="ic"><div class="ic-l">Payer VPA</div><div class="ic-v">${tx.payer_vpa}</div></div>
+      <div class="ic"><div class="ic-l">Payer Bank</div><div class="ic-v">${tx.payer_bank}</div></div>
+      <div class="ic"><div class="ic-l">Payee VPA</div><div class="ic-v">${tx.payee_vpa}</div></div>
+      <div class="ic"><div class="ic-l">Payee Bank</div><div class="ic-v">${tx.payee_bank}</div></div>
+      <div class="ic"><div class="ic-l">Amount</div><div class="ic-v">₹${tx.amount.toLocaleString('en-IN')} ${tx.currency}</div></div>
+      <div class="ic"><div class="ic-l">Auth Method</div><div class="ic-v">${tx.auth}</div></div>
+      <div class="ic"><div class="ic-l">Location</div><div class="ic-v">${tx.location}</div></div>
+      <div class="ic"><div class="ic-l">MCC</div><div class="ic-v">${tx.mcc}</div></div>
+      <div class="ic"><div class="ic-l">Device ID</div><div class="ic-v">${tx.device_id}</div></div>
+      <div class="ic"><div class="ic-l">IP Address</div><div class="ic-v">${tx.ip}</div></div>
+      <div class="ic"><div class="ic-l">Device Type</div><div class="ic-v">${tx.devtype}</div></div>
+      <div class="ic"><div class="ic-l">Device Rooted</div><div class="ic-v" style="color:${tx.rooted==='Y'?'var(--risk-high)':'inherit'}">${tx.rooted==='Y'?'⚠️ Yes':'No'}</div></div>
+    </div>
+    ${tx.remarks?`<div class="ic" style="margin-bottom:16px"><div class="ic-l">Analyst Remarks</div><div class="ic-v" style="font-family:var(--sans);font-weight:400">${tx.remarks}</div></div>`:''}
+
+    <div class="m-sec">Rule-by-Rule Breakdown (${result.rules.filter(r=>r.hit).length} of ${result.rules.length} triggered)</div>
+    ${result.rules.map(r=>`
+      <div class="m-rule ${r.hit?'mr-hit':'mr-ok'}">
+        <div class="mr-icon">${r.hit?'🔴':'✅'}</div>
+        <div class="mr-body">
+          <div class="mr-name">${r.name}</div>
+          <div class="mr-thresh">${r.detail} · Threshold: ${r.threshold}</div>
+        </div>
+        <div class="mr-pts" style="color:${r.hit?'var(--risk-high)':'var(--risk-low)'}">${r.hit?'+'+r.pts:'0'}</div>
+      </div>`).join('')}
+
+    <div class="m-actions">
+      <button class="ma ma-flag" onclick="closeMod()">🚩 Flag &amp; Escalate</button>
+      <button class="ma ma-ok" onclick="closeMod()">✓ Clear Transaction</button>
+      <button class="ma ma-close" onclick="closeMod()">Close</button>
+    </div>`;
+  document.getElementById('overlay').className='overlay open';
+}
+function closeMod(){document.getElementById('overlay').className='overlay'}
+document.getElementById('overlay').addEventListener('click',function(e){if(e.target===this)closeMod()});
+
+/* ═══════════════════════════════ TABLE ═══════════════════════════════ */
+function renderTable(){
+  const data=curFilter==='ALL'?ledger:ledger.filter(r=>r.result.tier===curFilter);
+  document.getElementById('empty-st').style.display=data.length?'none':'block';
+  document.getElementById('tbl-wrap').style.display=data.length?'block':'none';
+  document.getElementById('tbl-body').innerHTML=data.map((rec,i)=>{
+    const{tx,result,ts_display}=rec;
+    const col=tierColor(result.tier);
+    const hits=result.rules.filter(r=>r.hit).map(r=>`<span class="mini-tag">${r.name.split(' ').slice(0,2).join(' ')}</span>`).join('');
+    return`<tr class="${i===0&&curFilter==='ALL'?'rn':''}" onclick='openModal(ledger[${ledger.indexOf(rec)}])'>
+      <td class="td-mono" style="font-size:10px">${tx.ref}</td>
+      <td class="td-mono">${tx.payer_vpa}</td>
+      <td class="td-mono">${tx.payee_vpa}</td>
+      <td class="td-amount">₹${tx.amount.toLocaleString('en-IN')}</td>
+      <td class="td-mono">${tx.auth}</td>
+      <td class="td-score" style="color:${col}">${result.score}</td>
+      <td><span class="risk-pill rp-${result.tier}"><span class="dot"></span>${result.tier}</span></td>
+      <td>${hits||'<span style="font-size:10px;color:var(--fi-gray-300)">—</span>'}</td>
+      <td class="td-mono">${ts_display}</td>
+    </tr>`;
+  }).join('');
+  updFilterCounts();
+}
+
+function updFilterCounts(){
+  document.getElementById('fc-all').textContent=ledger.length;
+  ['LOW','MEDIUM','HIGH'].forEach(t=>{document.getElementById('fc-'+t).textContent=ledger.filter(r=>r.result.tier===t).length});
+}
+
+let curFcEl=document.querySelectorAll('.fc')[0];
+function setF(f,el){
+  curFilter=f;
+  document.querySelectorAll('.fc').forEach(e=>{e.className='fc'});
+  const cls={ALL:'fc fa',LOW:'fc fl',MEDIUM:'fc fm',HIGH:'fc fh'}[f];
+  el.className=cls;
+  renderTable();
+}
+
+/* ═══════════════════════════════ STATS ═══════════════════════════════ */
+function updStats(tier,score){
+  stats.total++;stats[tier]++;stats.scoreSum+=score;
+  document.getElementById('k-total').textContent=stats.total;
+  document.getElementById('k-low').textContent=stats.LOW;
+  document.getElementById('k-med').textContent=stats.MEDIUM;
+  document.getElementById('k-high').textContent=stats.HIGH;
+  const avg=Math.round(stats.scoreSum/stats.total);
+  document.getElementById('k-avg').textContent=avg;
+  const rate=Math.round(((stats.MEDIUM+stats.HIGH)/stats.total)*100)+'%';
+  document.getElementById('k-rate').textContent=rate;
+}
+
+/* ═══════════════════════════════ CSV ═══════════════════════════════ */
+function parseRows(text){
+  const lines=text.trim().split('\n').filter(l=>l.trim());
+  const hdr=lines[0].toLowerCase().split(',').map(s=>s.trim());
+  const col=k=>hdr.findIndex(h=>h.includes(k));
+  const ri=col('ref'),pi=col('payer'),qi=col('payee'),ai=col('amount'),ti=col('time')||col('ts'),li=col('loc'),di=col('device')||col('dev'),ii=col('ip'),oi=col('auth'),yi=col('type');
+  let n=0;
+  lines.slice(1).forEach(line=>{
+    if(!line.trim())return;
+    const c=line.split(',').map(s=>s.trim().replace(/^"|"$/g,''));
+    const amt=parseFloat(c[ai])||0;if(!amt)return;
+    const tx={
+      ref:c[ri]||('UPI/IMP/'+Math.random().toString(36).slice(2,9).toUpperCase()),
+      channel:'UPI_APP',payer_bank:'Unknown',payee_bank:'Unknown',mcc:'5999',currency:'INR',devtype:'Unknown',rooted:'U',remarks:'',
+      payer_vpa:c[pi]||'unknown@upi',payee_vpa:c[qi]||'unknown@upi',amount:amt,
+      timestamp:c[ti]||new Date().toISOString(),location:c[li]||'Unknown',
+      device_id:c[di]||'IMP-DEV',ip:c[ii]||'0.0.0.0',auth:c[oi]||'UPI_PIN',type:c[yi]||'P2M',
+      screened_at:new Date().toISOString()
+    };
+    trackVel(tx.payer_vpa,tx.timestamp);
+    const result=runEngine(tx);
+    ledger.unshift({tx,result,ts_display:new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'})});
+    histSave(ledger[0]);
+    updStats(result.tier,result.score);n++;
+  });
+  return n;
+}
+function handleFile(inp){
+  const f=inp.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=e=>{const n=parseRows(e.target.result);renderTable();document.getElementById('imp-status').textContent='✓ '+n+' transactions imported.';toast('Batch Import Complete',n+' transactions screened.','LOW')};
+  r.readAsText(f);
+}
+function doExport(){
+  if(!ledger.length){toast('No Data','Nothing to export.','MEDIUM');return;}
+  const hdr='Reference,Payer VPA,Payee VPA,Amount,Auth,Risk Score,Risk Tier,Rules Triggered,Screened At\n';
+  const rows=ledger.map(({tx,result,ts_display})=>{
+    const rules=result.rules.filter(r=>r.hit).map(r=>r.name).join(' | ');
+    return`"${tx.ref}","${tx.payer_vpa}","${tx.payee_vpa}",${tx.amount},"${tx.auth}",${result.score},${result.tier},"${rules}","${ts_display}"`;
+  }).join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([hdr+rows],{type:'text/csv'}));
+  a.download='fraud_detection_screening_'+new Date().toISOString().slice(0,10)+'.csv';a.click();
+}
+function clearAll(){
+  if(!ledger.length)return;
+  ledger.length=0;stats.total=stats.LOW=stats.MEDIUM=stats.HIGH=stats.scoreSum=0;
+  ['k-total','k-low','k-med','k-high'].forEach(id=>document.getElementById(id).textContent='0');
+  document.getElementById('k-avg').textContent='—';document.getElementById('k-rate').textContent='—';
+  updFilterCounts();
+  document.getElementById('empty-st').style.display='block';
+  document.getElementById('tbl-wrap').style.display='none';
+  document.getElementById('rb').className='result-box';
+}
+
+/* ═══════════════════════════════ TOAST ═══════════════════════════════ */
+let ttimer;
+function toast(title,sub,tier){
+  const el=document.getElementById('toast');
+  const icons={LOW:'✅',MEDIUM:'⚠️',HIGH:'🚨'};
+  document.getElementById('t-ico').textContent=icons[tier]||'ℹ️';
+  document.getElementById('t-title').textContent=title;
+  document.getElementById('t-sub').textContent=sub;
+  el.className='toast toast-'+tier+' show';
+  clearTimeout(ttimer);ttimer=setTimeout(()=>el.className='toast',4200);
+}
+
+/* ═══════════════════════════════ TABS ═══════════════════════════════ */
+function swTab(id,el){
+  document.querySelectorAll('.t').forEach(t=>t.className='t');
+  el.className='t on';
+  document.querySelectorAll('.pane-tab').forEach(p=>p.className='pane-tab');
+  document.getElementById('pane-'+id).className='pane-tab on';
+}
+
+/* ═══════════════════════════════ PRESETS ═══════════════════════════════ */
+function preset(t){
+  const P={
+    low:{ref:'UPI/DR/SAFE/001',payer:'rahul.kumar@hdfc',payee:'zomato@icici',amount:349,ts:'2026-05-25T13:30',loc:'Mumbai',dev:'d8f3a1b2',ip:'103.21.4.9',auth:'BIOMETRIC',type:'P2M',mcc:'5812',rooted:'N',chan:'UPI_APP',pb:'HDFC Bank',qb:'ICICI Bank'},
+    med:{ref:'UPI/DR/MED/002',payer:'priya.s@sbi',payee:'merchant121@axis',amount:9500,ts:'2026-05-25T21:45',loc:'Delhi',dev:'cfe71b90',ip:'49.36.12.1',auth:'UPI_PIN',type:'P2M',mcc:'5999',rooted:'N',chan:'UPI_BROWSER',pb:'SBI',qb:'Axis Bank'},
+    high:{ref:'UPI/DR/HIGH/003',payer:'unknown99@yesbank',payee:'transfer@financialinst',amount:87000,ts:'2026-05-25T03:15',loc:'Unknown',dev:'NEW-DEVICE-XYZ',ip:'185.220.101.45',auth:'NONE',type:'COLLECT',mcc:'4829',rooted:'Y',chan:'SDK',pb:'Yes Bank',qb:'Unknown'}
+  };
+  const p=P[t];
+  document.getElementById('f-ref').value=p.ref;
+  document.getElementById('f-channel').value=p.chan;
+  document.getElementById('f-payer').value=p.payer;
+  document.getElementById('f-payer-bank').value=p.pb;
+  document.getElementById('f-payee').value=p.payee;
+  document.getElementById('f-payee-bank').value=p.qb;
+  document.getElementById('f-mcc').value=p.mcc;
+  document.getElementById('f-type').value=p.type;
+  document.getElementById('f-amount').value=p.amount;
+  document.getElementById('f-auth').value=p.auth;
+  document.getElementById('f-time').value=p.ts;
+  document.getElementById('f-loc').value=p.loc;
+  document.getElementById('f-device').value=p.dev;
+  document.getElementById('f-ip').value=p.ip;
+  document.getElementById('f-rooted').value=p.rooted;
+}
+
+/* drag-drop */
+const dz=document.getElementById('dz');
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over')});
+dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
+dz.addEventListener('drop',e=>{
+  e.preventDefault();dz.classList.remove('over');
+  const f=e.dataTransfer.files[0];if(!f||!f.name.endsWith('.csv'))return;
+  const r=new FileReader();r.onload=ev=>{const n=parseRows(ev.target.result);renderTable();toast('File Imported',n+' records screened.','LOW')};r.readAsText(f);
+});
+
+document.getElementById('f-time').value=new Date().toISOString().slice(0,16);
+</script>
+
+</html>
+
+<script>
+window.swTab = swTab;
+window.doAnalyze = doAnalyze;
+</script>
+
+</body>
